@@ -1,0 +1,126 @@
+---
+// Logic Server-side (Fetch Data)
+const response = await fetch("https://api.sansekai.my.id/api/anime/latest");
+const animeList = await response.json();
+
+// Tentukan Title Halaman
+const title = "Update Anime Terbaru";
+---
+
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{title}</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  </head>
+  <body class="bg-gray-900 text-white p-8">
+    <div class="max-w-6xl mx-auto">
+      <h1 class="text-3xl font-bold mb-8 border-l-4 border-blue-500 pl-4">
+        {title}
+      </h1>
+
+      <!-- search form -->
+      <div class="mb-8">
+        <input
+          id="searchInput"
+          type="text"
+          placeholder="Cari anime, mis. one piece"
+          class="w-full md:w-1/2 p-2 rounded text-black"
+        />
+        <button
+          id="searchBtn"
+          class="ml-2 bg-blue-600 text-white px-4 py-2 rounded">Cari</button
+        >
+      </div>
+
+      <div
+        id="gridContainer"
+        class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6"
+      >
+        {
+          animeList.map((anime) => (
+            <div class="group relative bg-gray-800 rounded-lg overflow-hidden shadow-lg transition-transform hover:scale-105">
+              <a href={`/anime/${anime.url}`}>
+                {/* Image Container */}
+                <div class="aspect-[3/4] overflow-hidden">
+                  <img
+                    src={anime.cover}
+                    alt={anime.judul}
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+
+                {/* Overlay Badge Episode */}
+                <div class="absolute top-2 right-2 bg-blue-600 text-xs font-bold px-2 py-1 rounded">
+                  {anime.lastch}
+                </div>
+
+                {/* Info Text */}
+                <div class="p-3">
+                  <h2 class="text-sm font-semibold line-clamp-2 min-h-[40px] group-hover:text-blue-400 transition-colors">
+                    {anime.judul}
+                  </h2>
+                  <p class="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+                    <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    {anime.lastup}
+                  </p>
+                </div>
+              </a>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </body>
+</html>
+
+<style>
+  /* Line clamp untuk membatasi judul maksimal 2 baris */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>
+
+<script>
+  async function performSearch() {
+    const query = document.getElementById("searchInput").value.trim();
+    if (!query) return;
+    try {
+      const res = await fetch(
+        `https://api.sansekai.my.id/api/anime/search?query=${encodeURIComponent(query)}`,
+      );
+      const json = await res.json();
+      const results = Array.isArray(json) ? json : json.data?.[0]?.result || [];
+      const grid = document.getElementById("gridContainer");
+      grid.innerHTML = "";
+      results.forEach((anime) => {
+        const item = document.createElement("div");
+        item.className =
+          "group relative bg-gray-800 rounded-lg overflow-hidden shadow-lg transition-transform hover:scale-105";
+        item.innerHTML = `
+          <a href="/anime/${anime.url}">
+            <div class="aspect-[3/4] overflow-hidden">
+              <img src="${anime.cover}" alt="${anime.judul}" class="w-full h-full object-cover" loading="lazy" />
+            </div>
+            <div class="absolute top-2 right-2 bg-blue-600 text-xs font-bold px-2 py-1 rounded">${anime.lastch || ""}</div>
+            <div class="p-3">
+              <h2 class="text-sm font-semibold line-clamp-2 min-h-[40px] group-hover:text-blue-400 transition-colors">${anime.judul}</h2>
+              <p class="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>${anime.lastup || ""}
+              </p>
+            </div>
+          </a>
+        `;
+        grid.appendChild(item);
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  document.getElementById("searchBtn").addEventListener("click", performSearch);
+</script>
