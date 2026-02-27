@@ -1,12 +1,16 @@
 ---
-import Layout from "../../layouts/Layout.astro";
+import Layout from "../../../layouts/Layout.astro";
 
 // Ambil parameter chapterUrlId dari URL (misal: al-150441-1135)
-const { chapterUrlId } = Astro.params as { chapterUrlId: string };
+const { urlId, chapterUrlId } = Astro.params as {
+  urlId: string;
+  chapterUrlId: string;
+};
+// const { chapterUrlId } = Astro.params as { chapterUrlId: string };
 
 // derive anime url id by removing last segment after dash
 // this corresponds to the `urlId` expected by the detail API
-const urlId = chapterUrlId.split("-").slice(0, -1).join("-");
+// const urlId = chapterUrlId.split("-").slice(0, -1).join("-");
 
 // --- types ---------------------------------------------------------------
 interface StreamInfo {
@@ -184,7 +188,7 @@ const pageTitle = animeTitle
               <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                 {episodes.map((ep) => (
                   <a
-                    href={`/watch/${ep.url}`}
+                    href={`/watch/${urlId}/${ep.url}`}
                     class={`episode-link block p-2 text-sm bg-slate-800/40 hover:bg-slate-700/60 rounded transition-colors ${
                       ep.url === chapterUrlId ? "bg-blue-600" : ""
                     }`}
