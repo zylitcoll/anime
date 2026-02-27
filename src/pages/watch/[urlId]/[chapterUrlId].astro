@@ -1,0 +1,221 @@
+---
+import Layout from "../../layouts/Layout.astro";
+
+// Ambil parameter chapterUrlId dari URL (misal: al-150441-1135)
+const { chapterUrlId } = Astro.params as { chapterUrlId: string };
+
+// derive anime url id by removing last segment after dash
+// this corresponds to the `urlId` expected by the detail API
+const urlId = chapterUrlId.split("-").slice(0, -1).join("-");
+
+// --- types ---------------------------------------------------------------
+interface StreamInfo {
+  link: string;
+  reso?: string;
+  provide?: string | number;
+  id?: number;
+  [key: string]: any;
+}
+interface VideoData {
+  episode_id: number;
+  likeCount: number;
+  dislikeCount: number;
+  userLikeStatus?: number;
+  reso: string[]; // list of available qualities
+  stream: StreamInfo[]; // current stream(s)
+  [key: string]: any;
+}
+interface Episode {
+  url: string;
+  ch: string;
+  date: string;
+  [key: string]: any;
+}
+interface AnimeDetail {
+  chapter: Episode[];
+  judul?: string;
+  [key: string]: any;
+}
+
+// helper that performs both network calls and returns combined result
+async function loadWatchData(chapterUrlId: string, forcedReso?: string) {
+  const videoUrl =
+    `https://api.sansekai.my.id/api/anime/getvideo?chapterUrlId=${chapterUrlId}` +
+    (forcedReso ? `&reso=${encodeURIComponent(forcedReso)}` : "");
+  const detailUrl = `https://api.sansekai.my.id/api/anime/detail?urlId=${urlId}`;
+
+  const [vRes, dRes] = await Promise.all([fetch(videoUrl), fetch(detailUrl)]);
+  const vJson = await vRes.json();
+  const dJson = await dRes.json();
+
+  return {
+    videoData: (vJson.data || [])[0] as VideoData,
+    animeDetail: (dJson.data || [])[0] as AnimeDetail | undefined,
+  };
+}
+
+// load everything we need for rendering
+const reqUrl = new URL(Astro.request.url);
+const forcedReso = reqUrl.searchParams.get("reso") || undefined;
+const { videoData, animeDetail } = await loadWatchData(
+  chapterUrlId,
+  forcedReso,
+);
+
+if (!videoData) {
+  return Astro.redirect("/404");
+}
+
+const episodes: Episode[] = animeDetail?.chapter || [];
+const animeTitle: string | undefined = animeDetail?.judul;
+
+// Ambil link stream pertama (biasanya 480p sesuai JSON kamu)
+const streamSource = videoData.stream[0]?.link;
+
+// keep the server-provided list of resolutions; client script will
+// request a specific one when the user clicks
+const availableResolutions: string[] = videoData.reso;
+
+const pageTitle = animeTitle
+  ? `${animeTitle} – Episode ${chapterUrlId}`
+  : `Watching Episode ${chapterUrlId}`;
+---
+
+<Layout title={pageTitle}>
+  <div class="bg-black text-white font-sans">
+    <main class="max-w-5xl mx-auto mt-6 px-4">
+      <!-- back button -->
+      <div class="mb-4">
+        <a
+          href="javascript:history.back()"
+          class="text-blue-400 hover:underline flex items-center gap-1"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
+              clip-rule="evenodd"></path>
+          </svg>
+          Kembali ke Detail
+        </a>
+      </div>
+      <div
+        class="aspect-video bg-gray-800 rounded-xl overflow-hidden shadow-2xl ring-1 ring-white/10"
+      >
+        {
+          streamSource ? (
+            <video
+              id="anime-video"
+              controls
+              autoplay
+              class="w-full h-full"
+              poster="/loading-placeholder.jpg"
+            >
+              <source src={streamSource} type="video/mp4" />
+              Browser Anda tidak mendukung pemutar video ini.
+            </video>
+          ) : (
+            <div class="flex items-center justify-center h-full text-gray-500">
+              Link video tidak ditemukan.
+            </div>
+          )
+        }
+      </div>
+
+      <div class="mt-8 bg-gray-900/80 p-6 rounded-2xl border border-white/5">
+        <div
+          class="flex flex-col md:flex-row md:items:center justify-between gap-4"
+        >
+          <div>
+            <h1 class="text-xl font-bold text-blue-400">
+              Sedang Memutar: {chapterUrlId}
+            </h1>
+            <p class="text-sm text-gray-400 mt-1">
+              Gunakan resolusi terbaik untuk pengalaman menonton maksimal.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-6 bg-black/40 px-4 py-2 rounded-lg">
+            <div class="flex items-center gap-2 text-green-400">
+              <span class="text-sm font-bold">{videoData.likeCount}</span>
+              <small class="text-xs opacity-70">Likes</small>
+            </div>
+            <div class="w-px h-4 bg-gray-700"></div>
+            <div class="flex items-center gap-2 text-red-400">
+              <span class="text-sm font-bold">{videoData.dislikeCount}</span>
+              <small class="text-xs opacity-70">Dislikes</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex flex-wrap gap-2" id="resolutionContainer">
+          <span
+            class="text-xs font-semibold text-gray-500 uppercase tracking-widest w-full mb-1"
+            >Resolusi Tersedia ({availableResolutions.length}):</span
+          >
+          {
+            availableResolutions.map((label, i) => (
+              <button
+                class={
+                  `resolution-button px-4 py-1.5 rounded-md text-xs font-bold border ` +
+                  (i === 0
+                    ? "bg-blue-600 border-blue-500"
+                    : "bg-gray-800 border-gray-700 hover:bg-gray-700")
+                }
+                data-reso={label}
+              >
+                {label}
+              </button>
+            ))
+          }
+        </div>
+
+        {
+          episodes.length > 0 && (
+            <div class="mt-6">
+              <h3 class="text-lg font-semibold text-white mb-2">
+                Daftar Episode
+              </h3>
+              <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                {episodes.map((ep) => (
+                  <a
+                    href={`/watch/${ep.url}`}
+                    class={`episode-link block p-2 text-sm bg-slate-800/40 hover:bg-slate-700/60 rounded transition-colors ${
+                      ep.url === chapterUrlId ? "bg-blue-600" : ""
+                    }`}
+                  >
+                    Ep {ep.ch}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )
+        }
+      </div>
+
+      <div
+        class="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg"
+      >
+        <p class="text-[11px] text-yellow-500/80 leading-relaxed text-center">
+          Catatan: Jika video buffering, coba turunkan resolusi atau cek koneksi
+          internet Anda. Hosting gratisan biasanya memiliki limit bandwidth
+          tertentu.
+        </p>
+      </div>
+    </main>
+
+    <div class="py-10 text-center text-gray-600 text-[10px]">
+      Source ID: {videoData.episode_id} | Provider ID: {
+        videoData.stream[0]?.provide
+      }
+    </div>
+  </div>
+
+  <!-- client script handles resolution switching and auto next -->
+  <script src="/js/watch-controls.js" is:inline></script>
+</Layout>
